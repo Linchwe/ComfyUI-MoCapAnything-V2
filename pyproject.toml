@@ -1,0 +1,12 @@
+[project]
+name = "comfyui-mocapanything-v2"
+description = "MoCapAnything V2 for ComfyUI (Windows portable): video -> motion (FBX, GLB or BVH) on your own rigged character. RMBG-1.4 replaced with MIT BiRefNet."
+version = "1.3.0"
+license = { file = "LICENSE" }
+dependencies = ["opencv-python-headless", "scikit-image", "matplotlib", "trimesh", "pygltflib", "imageio-ffmpeg", "timm"]
+
+[project.urls]
+Original = "https://github.com/phongdaot/MocapAnything"
+
+[tool.comfy]
+DisplayName = "ComfyUI-MoCapAnything-V2"

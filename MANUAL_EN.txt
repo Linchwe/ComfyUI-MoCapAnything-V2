@@ -1,0 +1,194 @@
+ComfyUI-MoCapAnything-V2 — MoCapAnything V2 custom nodes for ComfyUI (Windows / ComfyUI portable): user manual
+(Original: github.com/phongdaot/MocapAnything, modified from commit c99fb22 of 2026-09-04)
+(Korean version: MANUAL_KO.txt — same content)
+
+
+1. What changed
+
+- The Linux-only bash scripts were ported to Python (win/rig_prep.py), so your own character can be prepared on Windows.
+- The background removal model RMBG-1.4 (non-commercial license) was replaced with BiRefNet (MIT license). The BRIA code was removed completely.
+- Linux-only code such as ffprobe, /tmp and `-pattern_type glob` (not supported by Windows ffmpeg) was fixed.
+- Units are normalized automatically, so FBX files exported from Blender in meters also work. (The original handled only centimeter FBX correctly.) The character and motion FBX files follow the same rule, and root movement in motions is scaled to match.
+- Spaces in bone names are replaced with _ . (The BVH format does not allow spaces in names.)
+- Character FBX files without animation are accepted. (The original FBX cleanup step could not handle an FBX without an action.)
+- A character can be prepared from one FBX. The original needed a character FBX plus separate motion FBX files; this version uses the animation inside the character FBX as the reference motion. Only when there is no animation at all is a reference motion that moves every bone slightly generated automatically (always on; there is no option for it).
+- The input video is resampled to 30 fps. The model was trained on 30 fps and the output BVH uses 1/30 s per frame, so a 60 fps video no longer comes out as slow motion.
+- Uses the Python, torch and transformers of ComfyUI portable as they are, and adds only a few common packages that ComfyUI does not include (OpenCV etc.).
+- Node names, descriptions, tooltips and console messages are all in English.
+- The result is saved as ONE file: FBX / GLB (rigged mesh + skeleton + animation) or BVH (skeleton + animation), named with filename_prefix like other Save nodes.
+- Clean-up options were added (stabilize, foot_lock, in_place, mirror_limbs, mirror_timing). The original model predicts only the pose with the hips fixed in one spot, so the feet float when the knees bend, and the body sometimes turns around by itself. In side views, the hidden arm and leg limp. These options fix that.
+- The original detects the character's facing direction automatically, but it sometimes takes the side for the front on human characters, so in this version you choose the facing direction (front) yourself (default +z). Running it again with the same FBX skips the preparation; it prepares again automatically only when the FBX file or front changed. It outputs the reference image (front_view) so you can check the front.
+- The character of the motion capture node comes from the target output of the preparation node.
+
+
+2. Installation (same as any other custom node)
+
+- Unzip and put the ComfyUI-MoCapAnything-V2 folder into ComfyUI\custom_nodes\.
+- 7 Python packages that ComfyUI does not include are needed (OpenCV, scikit-image, matplotlib, trimesh, pygltflib, imageio-ffmpeg, timm). If you installed the node with ComfyUI Manager, they are installed automatically. If you put the folder in by hand, close ComfyUI, type cmd in the address bar of the ComfyUI_windows_portable folder to open a command window, and run the line below. Packages that are already installed are skipped.
+
+  python_embeded\python.exe -m pip install -r ComfyUI\custom_nodes\ComfyUI-MoCapAnything-V2\requirements.txt
+
+- If another custom node already installed OpenCV (opencv-python or opencv-contrib-python), delete the opencv-python-headless line from requirements.txt before running it. Two kinds of OpenCV installed together overwrite each other and cause errors. Check with python_embeded\python.exe -m pip list | findstr opencv (no output means none is installed).
+- torch, transformers etc. are used from ComfyUI as they are, and the rotation library roma is included in the vendor folder, so ComfyUI's torch version is not changed.
+- Restart ComfyUI.
+- Type MCA in the node search to find the 2 nodes. (Category: MocapAnything)
+  - MCA Prepare Character : prepares your character (again only when the FBX changes)
+  - MCA Motion Capture : extracts motion from a video
+- Models are downloaded automatically the first time a node runs, into ComfyUI\models\mocapanything\ like other models.
+  - checkpoints\ : MoCapAnything V2 weights (about 0.46 GB)
+  - hf\ : DINOv2-large (about 1.2 GB), BiRefNet (about 0.9 GB), SAM2 base-plus (about 0.3 GB), T5-base (about 0.9 GB)
+  - characters\ : data of your prepared characters
+- The first run takes a while because of the downloads (about 4 GB in total). Lines like [MocapAnything] [models] downloading in the console window are normal.
+- If you keep model folders on another drive with extra_model_paths.yaml, add a mocapanything entry there and that location is used.
+- The ComfyUI folder path must not contain non-ASCII (e.g. Korean) characters. (OpenCV cannot read images from such paths.)
+- Blender 4.2 or later is required (built against 4.5). It is used by 'MCA Prepare Character' and by MCA Motion Capture when saving FBX / GLB (the Blender used for preparation is reused). The default install location is found automatically; if Blender is installed elsewhere, put the path to blender.exe in the node's blender_path.
+
+
+3. Example workflow (ready to use)
+
+- Location: ComfyUI-MoCapAnything-V2\example_workflows\MocapAnything_video_to_motion.json
+- How to open: in ComfyUI's left menu, Templates > EXTENSIONS (bottom) > ComfyUI-MoCapAnything-V2, or drag the json file onto the ComfyUI canvas.
+- Layout: Load Video → MCA Motion Capture ← MCA Prepare Character (target output → target input)
+  - front_view of MCA Prepare Character → Preview Image (front check)
+  - mesh_3d → Preview 3D (Advanced) (character mesh)
+  - skeleton_3d → Preview 3D (Advanced) (skeleton)
+  - MCA Motion Capture saves the result file itself, so there is no Save node. The default name is output\MocapAnything\Mocap_00001_.fbx.
+  - All nodes keep their default names, and there is no note node.
+- Three things to change:
+  - Load Video : choose your video
+  - fbx_file of MCA Prepare Character : choose your character FBX (put it in ComfyUI\input first; RiggedCharacter/Character.fbx in the example is only a placeholder name)
+  - name of MCA Prepare Character : character name
+- Press Run and it prepares the character, then captures the motion. From the second run on, the preparation step is skipped while the FBX stays the same.
+- After the first preparation, check in Preview Image that the character faces the camera. If it shows the side or the back, change front and run again (see 4).
+
+
+4. Node 1 — MCA Prepare Character (prepares again only when the FBX changes)
+
+- Put the character FBX (mesh + armature + skin weights) in the ComfyUI\input folder. Uploading it with a 'Load 3D' node also works; it goes to input\3d and shows up in the list.
+- fbx_file: choose the character FBX from the list. For an FBX somewhere else, put the full path in fbx_path.
+- name: character name (letters/digits). Empty = the FBX file name. Spaces and underscores become - . Mixamo files are often named after the animation (Walking.fbx), so give each character its own name.
+- For human characters a Mixamo rig is recommended; it gave the most stable results in testing. Rigs with many twist bones or bones stacked at the same position can give broken results.
+- Results are much more accurate when the character FBX holds an animation (any motion such as walk or idle). The model uses the first frame of the reference motion and its render as the reference for what the character looks like. T-pose / bind-pose frames at the start are skipped automatically.
+  - Mixamo: pick any animation and download it With Skin.
+  - Characters without available animations (animals, objects): key a simple motion of 10 frames or more in Blender (breathing, a head turn etc.) and export that. Animations shorter than 10 frames are not used as the reference; the auto-generated reference motion is used instead.
+- When no animation is found at all, a reference motion that moves every bone slightly is generated automatically (always on; no option). A character that is only rigged can be used as is. The reference pose is then the rest pose (T-pose etc.), so the result's arms and legs tend to spread toward the rest pose. The console shows a [NOTE].
+- Units (cm / m) and the up axis (Y-up / Z-up) are matched automatically. Mixamo FBX files and FBX files exported from Blender can be used as they are.
+- front: the direction the character faces in the FBX. Keep the default +z. Mixamo characters, and characters whose face is visible in Blender's Front view (numpad 1) exported with the default FBX settings, are +z. If front_view shows the side or the back, choose -z, +x or -x and run again. A wrong front makes the result much worse.
+- Automatic change detection: when you run it again with the same name and the FBX file (path, size, modification time) and front are the same as last time, preparation is skipped and it finishes in a few seconds. The console shows [prepare] '<name>' is unchanged ... preparation skipped. When you export the FBX again or change front, it prepares again automatically. So you can keep this node connected in front of the motion capture node.
+- Using the same name with another FBX replaces the previous character's data (the console shows a [prepare] NOTE).
+- blender_path: only needed when Blender is not installed in its default location.
+- Output target: the prepared character name. Connect it to target of MCA Motion Capture.
+- Output front_view: the reference render the model uses as 'what this character looks like'. Connect it to Preview Image and check that the character faces the camera.
+- It usually takes 5-15 minutes (several Blender jobs + reference image render + embedding). The console shows the steps ── 1/9 to ── 9/9.
+- Up to 150 bones. Use an FBX with only the body skeleton, without physics bone chains such as veils or hair (for EZSoftBone). Physics bones are driven separately in the engine, so they do not need to be in motion capture.
+- Remove meshes without skin weights (props etc.). They appear bunched up at the origin in the 3D preview of the result.
+- Results go to ComfyUI\models\mocapanything\characters\zoo, and the log to logs\prepare_<name>.log in the same place.
+
+
+5. Node 2 — MCA Motion Capture
+
+- Connect one of three video inputs: video (Load Video node), images (image sequence + images_fps), or video_path (file path; relative to the input folder is allowed).
+- target: connect the target output of MCA Prepare Character (required).
+- use_sam: when on, SAM2 finds and isolates the main person in the video. Recommended for busy backgrounds or several people. When off, only BiRefNet background removal is used.
+- start_seconds, max_seconds: which part of the video to use. Because of the model limit (301 frames), up to 10 seconds per run. Split longer videos into sections and run several times.
+- filename_prefix: path and file name inside the output folder, the same way as other Save nodes. Meshes/RigMesh saves output\Meshes\RigMesh_00001_.fbx, and the number goes up on every run. No other folders (such as date folders) are created.
+- save_format: file format.
+  - FBX: rigged mesh + skeleton + animation. Works in Unity, Unreal and Godot (4.3+).
+  - GLB: same content as FBX. Smoothest in Godot; Unreal also imports it.
+  - BVH: skeleton + animation only (the format cannot hold a mesh). For Blender or mocap tools.
+- The character inside FBX / GLB is the prepared character as is: same bone names (only spaces become _), hierarchy, rest pose and skin weights; the motion is one action baked at 30 fps.
+- keep_work_files: when on, intermediate files (frame images, raw BVH etc.) are kept in ComfyUI\temp\mocapanything. The temp folder is cleared when ComfyUI starts. Turn it on only for troubleshooting.
+- free_comfy_vram: unloads the models ComfyUI holds from VRAM before running. Keeping it on is recommended.
+- Clean-up (the 5 items at the bottom of the node). Applied to all three formats (FBX / GLB / BVH), and the mesh_3d / skeleton_3d previews show the cleaned result too. The console shows what was done with the prefix [motion].
+  - stabilize: fix flips (default) / lock facing / off
+    - fix flips: repairs errors where one joint snaps away for a frame or two and back, using the frames around it. Normal motion is not touched.
+    - lock facing: fix flips plus removing the body's turning (around the up axis), so the character always faces its own front. Use it for motions that keep one direction, such as front-facing dances, walks and runs. The facing is taken from the line through both thighs and both upper arms, not from the pelvis alone, because the model sometimes predicts the pelvis turned a few degrees. Real turns (spins) are removed too, so keep fix flips for those.
+    - off: the model output as is.
+  - foot_lock: off by default. When on, the lowest foot is put on the ground every frame, and the hips are moved so the standing foot does not slide. So a walk moves forward with its steps (root motion). Good for walks and runs; turn it off for jumps, sitting or kneeling, where both feet leave the ground or the body goes down. When off, the hips stay in one spot as in the original, and the feet can float when the knees bend.
+  - in_place: when on, travel on the ground is removed, like Mixamo's In Place. Together with foot_lock the up/down motion (knee bends, jumps) is kept; with foot_lock off the hips stay at one spot. Turn it on when the game moves the character by code. (Off by default)
+  - mirror_limbs: off (default) / auto / left -> right / right -> left
+    - Copies the arm and leg motion of one side to the other side, mirrored. Use it for side views where the side away from the camera is hidden and limps.
+    - left -> right copies the left side's motion to the right (the character's left). auto picks the steadier side, but it can be wrong, so choose the side closer to the camera yourself when you know it.
+    - Only bones with a left/right pair change (shoulder to fingers, thigh to toes); the hips, spine, neck and head stay as they are.
+    - Bone names must contain Left/Right (or L/R). Mixamo rigs work.
+  - mirror_timing: match original (default) / half cycle / same frame
+    - match original: finds the moments when the limping leg is furthest forward and furthest back, and lines the copied motion up with them. The original rhythm is kept even when the steps speed up or slow down. If those moments are not found, half cycle is used instead.
+    - half cycle: shifts by half a step cycle so the two sides alternate.
+    - same frame: copies without a time shift. For motions where both sides move together, such as jumps or raising both arms.
+  - Recommended settings
+    - Front-facing dance, motion in place: stabilize = lock facing, foot_lock on (also in_place for in-place game clips)
+    - Side-view walk: mirror_limbs = side closer to the camera -> other side, mirror_timing = match original, stabilize = lock facing, foot_lock on
+    - left/right in mirror_limbs follow the character's bone names (Left/Right), not the left/right of the video frame. If the copy looks reversed in the result, choose the other direction.
+    - Motion that turns or changes direction: stabilize = fix flips
+- Output file_path: path of the saved file.
+- Outputs mesh_3d / skeleton_3d: connect them to a 'Preview 3D (Advanced)' node to orbit around the result. They are preview files created only in the temp folder, not in output.
+- No comparison video (input | skeleton) is made.
+- Pressing Cancel in ComfyUI while it runs also stops the compute process.
+
+
+6. Using the results
+
+- Unity: put the FBX in Assets and import it as Humanoid (or Generic) in the Rig tab. To use only the animation, use the clip from the Animation tab.
+- Unreal: when importing the FBX, choose an existing skeleton to bring in only the animation; without one, the mesh and skeleton are created as well.
+- Godot: put the GLB in the project and use it as a scene directly. FBX also imports as is in 4.3+.
+- Blender: importing FBX / GLB opens the character with the motion applied. If you need only the skeleton and motion, delete the mesh object and export again.
+- To change the saved format, import it in Blender and export to the other format (FBX <-> GLB).
+- With foot_lock on and in_place off, the file has root motion: the Hips bone travels with the steps. Use the engine's root motion feature, or turn on in_place to move the character by code.
+
+
+7. Structure notes (for troubleshooting)
+
+- The nodes run the computation in a separate Python process (win\mocap_cli.py). Folder names in this repository such as utils / models clash with ComfyUI's, and loading them in the same process could break ComfyUI.
+- So each run spends about 30 s to 1 min more reloading the models. In return, all VRAM is released when it finishes.
+- Node progress and errors are shown in the ComfyUI console window with the prefix [MocapAnything].
+- The original repository's Linux example folder (examples) was renamed to original_examples so it does not clash with ComfyUI's template folder names.
+
+
+8. Licenses (for commercial use)
+
+- MoCapAnything V2 code and weights: MIT
+- BiRefNet (background removal): MIT
+- DINOv2: Apache-2.0
+- SAM2: Apache-2.0
+- T5-base: Apache-2.0
+- roma (included in the vendor folder): BSD-3-Clause, NAVER Corp. License file included at vendor\roma\LICENSE
+- Neither the code nor the weights of RMBG-1.4 are included in this version.
+
+
+9. What has and has not been verified
+
+- Verified on a Linux test setup by running a real ComfyUI server (commit of 2026-10-29, frontend 1.57.6): the example workflow appears in Templates and opens without errors, and running the workflow as is completes character preparation → motion capture → both Preview 3D nodes, with exactly one file saved in output.
+- Saved-file check: FBX / GLB were imported back into Blender and joint positions and rotations were compared with the raw BVH on every frame (including a rig with arbitrary bone rolls): position error 0, rotation difference 0.04 degrees or less. The character size matches the original.
+- Also verified: model folder registration and the first-run auto download flow, use of the bundled roma, skipping an already prepared character, video_path / images inputs, time range selection, and stopping the compute process on Cancel.
+- Also verified: meter and centimeter FBX files end up with the same result, and root movement of meter-unit motion FBX files and bone names with spaces follow the same rule as the character.
+- That setup has no GPU and no model downloads, so the models were replaced with fakes and only the flow was checked. Actual motion quality has not been verified.
+- On a real Windows machine, a Mixamo character prepared with front +z gave good motion capture results. If an error occurs, send the last 30 or so [MocapAnything] lines from the ComfyUI console window.
+- On a real Windows machine (RTX 3060, ComfyUI 0.41.1), the example workflow as is ran through character preparation (about 140 s) → front_view output → motion capture → FBX saving.
+- If BiRefNet cannot be loaded (e.g. a transformers version issue), it switches to InSPyReNet (transparent-background, MIT) automatically.
+- The clean-up options were checked on a real dance result (front-facing AI video, 150 frames, Mixamo rig): fix flips repaired 3 snapping frames, lock facing fixed a body direction that turned up to 215 degrees, and foot_lock put feet that floated up to 0.5 m back on the ground. The cleaned result was saved as FBX and rendered in Blender to check it.
+- mirror_limbs was checked with a walk where one leg was broken on purpose (the step speed changes midway): the restored side differed from the original motion by 2 degrees on average (half cycle 8 degrees, 14 degrees before restoring). It has not been checked with a real side-view video yet.
+- FBX / GLB saving was checked in Blender 4.2, 4.5 and 5.2: the animation is included correctly in all of them.
+
+
+10. Troubleshooting (console messages are in English)
+
+- Model download interrupted: run the node again and it resumes.
+- "Blender not found": put the path to blender.exe in blender_path of MCA Prepare Character.
+- "Character FBX not found": choose the FBX again in fbx_file, or put the full path in fbx_path. RiggedCharacter/Character.fbx in the example workflow is only a placeholder name.
+- "FBX cleanup produced no output": the reason is written in ComfyUI\models\mocapanything\characters\zoo\_fixed\<name>\_fix_failed.tsv.
+- "The rig has N bones; MoCapAnything supports up to 150": prepare again with an FBX without the physics bone chains.
+- "'<name>' is not a prepared character": connect the target output of MCA Prepare Character to target of MCA Motion Capture.
+- "No input video": connect or enter one of video, images, video_path.
+- front_view shows the side or the back, or only the mesh is rotated in the result, or the motion is very poor: change front to -z, +x or -x and run again. Changing front prepares again automatically.
+- "Alignment to +Z failed": try another front. The reason is written in ComfyUI\models\mocapanything\characters\zoo\characters_face_zplus\_align_failed.tsv.
+- Reference image rendering takes long: only 8 front frames are rendered with Blender EEVEE. The first time, shader compilation can take a few minutes.
+- "No CUDA GPU found": an NVIDIA GPU and a CUDA build of torch are required.
+- CUDA out of memory: turn on free_comfy_vram and run again.
+- The result's arms and legs spread wider than in the video or drift toward the T-pose: run again with a character FBX that holds an animation (a changed FBX is prepared again automatically). If the console showed the 'no animation found' [NOTE], this is the case.
+- Feet float in the air in the result: turn on foot_lock.
+- The body spins around by itself or faces a wrong direction: set stabilize to lock facing.
+- In a side-view video, the far arm and leg limp: set mirror_limbs to side closer to the camera -> other side. If the copy looks reversed, choose the other direction.
+- The character walks forward but you need an in-place clip: turn on in_place.
+- "[motion] mirror: no Left/Right bone pairs found": the rig has no left/right in its bone names, so mirror_limbs cannot be used.
+- The motion differs a lot from the video: videos with the whole body in frame, a simple background, and a front or diagonal view work best. AI-generated videos (16 fps etc.) can be used as they are; they are resampled to 30 fps.
+- To delete all prepared characters and start over: delete the whole ComfyUI\models\mocapanything\characters folder. Characters are prepared again on the next run.

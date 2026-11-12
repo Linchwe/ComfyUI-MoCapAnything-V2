@@ -1,0 +1,194 @@
+ComfyUI-MoCapAnything-V2 — MoCapAnything V2 ComfyUI 커스텀 노드 (윈도우 / ComfyUI 포터블용) 사용 설명서
+(원본: github.com/phongdaot/MocapAnything, 2026-09-04 커밋 c99fb22 기준으로 수정)
+(영문판: MANUAL_EN.txt — 내용 동일)
+
+
+1. 무엇이 바뀌었나
+
+- 리눅스 전용 bash 스크립트를 파이썬(win/rig_prep.py)으로 옮겨서, 윈도우에서 내 캐릭터 전처리가 됩니다.
+- 비상업 라이선스인 배경 제거 모델 RMBG-1.4 를 MIT 라이선스 BiRefNet 으로 바꿨습니다. BRIA 코드도 완전히 지웠습니다.
+- ffprobe, /tmp, `-pattern_type glob`(윈도우 ffmpeg 미지원) 같은 리눅스 전제 코드를 고쳤습니다.
+- 블렌더에서 미터 단위로 내보낸 FBX 도 쓸 수 있게 단위를 자동으로 맞춥니다. (원본은 cm 단위 FBX 만 제대로 처리) 캐릭터와 모션 FBX 모두 같은 규칙으로 맞추고, 모션의 루트 이동 거리도 같이 보정합니다.
+- 본 이름에 공백이 있으면 _ 로 바꿉니다. (BVH 형식이 이름에 공백을 허용하지 않음)
+- 애니메이션 없는 캐릭터 FBX 도 받습니다. (원본 FBX 정리 단계가 액션 없는 FBX 를 처리하지 못함)
+- 캐릭터 FBX 하나로 준비할 수 있습니다. 원본은 캐릭터 FBX 와 모션 FBX 를 따로 넣어야 했는데, 이 판은 캐릭터 FBX 안에 애니메이션이 있으면 그걸 참조 모션으로 씁니다. 애니메이션이 전혀 없을 때만 모든 본을 살짝 움직인 기준 모션을 자동으로 만들어 씁니다(옵션 없이 항상 켜져 있습니다).
+- 입력 영상을 30fps 로 맞춰서 처리합니다. 모델이 30fps 로 학습됐고 결과 BVH 도 1/30초 간격이라, 60fps 영상이 느린 모션으로 나오던 문제를 막습니다.
+- ComfyUI 포터블의 파이썬과 torch, transformers 를 그대로 쓰고, ComfyUI 에 없는 일반 패키지 몇 가지(OpenCV 등)만 더 설치합니다.
+- 노드 이름, 설명, 툴팁, 콘솔 메시지는 모두 영어입니다.
+- 결과는 파일 하나로 저장합니다. FBX / GLB(리깅된 메시 + 뼈대 + 애니메이션) 또는 BVH(뼈대 + 애니메이션) 중에서 고르고, 이름은 다른 Save 노드처럼 filename_prefix 로 정합니다.
+- 결과 다듬기 옵션을 넣었습니다(stabilize, foot_lock, in_place, mirror_limbs, mirror_timing). 원본 모델은 골반을 한 자리에 고정한 채 자세만 예측해서, 무릎을 굽히면 발이 공중에 뜨고 몸 방향이 혼자 크게 돌아가는 경우가 있습니다. 옆모습 영상에서는 가려진 쪽 팔다리가 절룩거립니다. 이 옵션들로 잡습니다.
+- 원본은 캐릭터의 정면 방향을 자동으로 판별하는데, 사람 캐릭터에서 옆을 정면으로 잘못 잡는 경우가 있어 이 판은 정면 방향(front)을 직접 고릅니다(기본 +z). 같은 FBX 로 다시 실행하면 준비를 건너뛰고, FBX 파일이 바뀌었거나 front 를 바꿨을 때만 자동으로 다시 준비합니다. 정면이 맞는지 볼 수 있게 참조 이미지(front_view)를 출력합니다.
+- 모션 추출 노드의 캐릭터는 준비 노드의 target 출력을 연결해서 정합니다.
+
+
+2. 설치 (다른 커스텀 노드와 같음)
+
+- 압축을 풀어 ComfyUI-MoCapAnything-V2 폴더를 ComfyUI\custom_nodes\ 안에 넣습니다.
+- ComfyUI 에 없는 파이썬 패키지 7개(OpenCV, scikit-image, matplotlib, trimesh, pygltflib, imageio-ffmpeg, timm)를 설치해야 합니다. ComfyUI Manager 로 설치했다면 자동으로 설치됩니다. 압축 파일로 직접 넣었다면 ComfyUI 를 끈 상태에서 ComfyUI_windows_portable 폴더의 주소창에 cmd 를 입력해 명령 창을 열고 아래 한 줄을 실행하세요. 이미 설치된 패키지는 건너뜁니다.
+
+  python_embeded\python.exe -m pip install -r ComfyUI\custom_nodes\ComfyUI-MoCapAnything-V2\requirements.txt
+
+- 다른 커스텀 노드 때문에 OpenCV(opencv-python 또는 opencv-contrib-python)가 이미 설치되어 있다면, requirements.txt 에서 opencv-python-headless 줄을 지우고 실행하세요. OpenCV 가 두 종류 같이 설치되면 서로 덮어써서 오류가 납니다. 설치 여부는 python_embeded\python.exe -m pip list | findstr opencv 로 확인합니다. (아무것도 나오지 않으면 없는 것)
+- torch, transformers 등은 ComfyUI 에 이미 있는 것을 그대로 쓰고, 회전 계산 라이브러리 roma 는 vendor 폴더에 들어 있어서 ComfyUI 의 torch 버전은 바뀌지 않습니다.
+- ComfyUI 를 다시 시작합니다.
+- 노드 검색에서 MCA 를 치면 노드 2개가 나옵니다. (카테고리 MocapAnything)
+  - MCA Prepare Character : 내 캐릭터 준비 (FBX 가 바뀔 때만 다시 준비)
+  - MCA Motion Capture : 영상에서 모션 추출
+- 모델은 노드를 처음 실행할 때 자동으로 받습니다. 받는 위치는 다른 모델들처럼 ComfyUI\models\mocapanything\ 입니다.
+  - checkpoints\ : MoCapAnything V2 가중치 (약 0.46GB)
+  - hf\ : DINOv2-large (약 1.2GB), BiRefNet (약 0.9GB), SAM2 base-plus (약 0.3GB), T5-base (약 0.9GB)
+  - characters\ : 준비한 내 캐릭터 데이터
+- 처음 실행은 다운로드 때문에 오래 걸립니다(총 약 4GB). 콘솔 창에 [MocapAnything] [models] downloading 줄이 보이면 정상입니다.
+- extra_model_paths.yaml 로 모델 폴더를 다른 드라이브에 두고 있다면, 거기에 mocapanything 항목을 추가하면 그 위치를 씁니다.
+- ComfyUI 폴더 경로에 한글이 없어야 합니다. (OpenCV 가 한글 경로의 이미지를 읽지 못합니다)
+- 블렌더 4.2 이상이 필요합니다(4.5 기준으로 만들었습니다). 'MCA Prepare Character' 노드와, MCA Motion Capture 에서 FBX / GLB 로 저장할 때 씁니다(준비할 때 쓴 블렌더를 그대로 씁니다). 기본 설치 경로는 자동으로 찾고, 다른 곳에 설치했으면 노드의 blender_path 에 blender.exe 경로를 적습니다.
+
+
+3. 예제 워크플로우 (바로 쓰기)
+
+- 위치: ComfyUI-MoCapAnything-V2\example_workflows\MocapAnything_video_to_motion.json
+- 여는 법: ComfyUI 왼쪽 메뉴 Templates(템플릿) > 아래쪽 EXTENSIONS > ComfyUI-MoCapAnything-V2 에서 고르거나, json 파일을 ComfyUI 화면에 끌어다 놓습니다.
+- 구성: Load Video → MCA Motion Capture ← MCA Prepare Character(target 출력 → target 입력)
+  - MCA Prepare Character 의 front_view → Preview Image (정면 확인용)
+  - mesh_3d → Preview 3D (Advanced) (캐릭터 메시)
+  - skeleton_3d → Preview 3D (Advanced) (스켈레톤)
+  - 결과 파일은 MCA Motion Capture 가 직접 저장하므로 Save 노드는 없습니다. 기본 이름은 output\MocapAnything\Mocap_00001_.fbx 입니다.
+  - 노드 이름은 모두 기본 이름 그대로이고, 메모 노드는 없습니다.
+- 바꿀 곳은 세 군데입니다.
+  - Load Video : 내 영상 고르기
+  - MCA Prepare Character 의 fbx_file : 내 캐릭터 FBX 고르기 (ComfyUI\input 에 먼저 넣기. 예제에 적힌 RiggedCharacter/Character.fbx 는 자리 표시용 이름입니다)
+  - MCA Prepare Character 의 name : 캐릭터 이름
+- 그대로 Run 을 누르면 캐릭터 준비 → 모션 추출이 차례로 돕니다. 두 번째 실행부터는 FBX 가 그대로면 준비 단계를 건너뜁니다.
+- 처음 준비가 끝나면 Preview Image 에 캐릭터가 카메라를 정면으로 보고 있는지 먼저 확인하세요. 옆모습이나 뒷모습이면 front 를 바꿔 다시 실행합니다(4번 참고).
+
+
+4. 노드 1 — MCA Prepare Character (FBX 가 바뀔 때만 다시 준비)
+
+- 캐릭터 FBX(메시 + 아마추어 + 스킨 웨이트)를 ComfyUI\input 폴더에 넣습니다. 'Load 3D' 노드로 업로드해도 input\3d 에 들어가서 목록에 나옵니다.
+- fbx_file: 목록에서 캐릭터 FBX 를 고릅니다. 다른 곳에 있는 FBX 는 fbx_path 에 전체 경로를 적습니다.
+- name: 캐릭터 이름(영문/숫자). 비우면 FBX 파일 이름을 씁니다. 공백과 밑줄은 - 로 바뀝니다. 믹사모 파일은 Walking.fbx 처럼 애니메이션 이름으로 받아지는 경우가 많으니, 캐릭터마다 이름을 따로 주세요.
+- 사람 캐릭터는 믹사모(Mixamo) 리그를 권장합니다. 테스트에서 가장 안정적으로 나왔습니다. 트위스트 본이나 같은 위치에 겹친 본이 많은 리그는 결과가 흐트러질 수 있습니다.
+- 캐릭터 FBX 에 애니메이션(걷기, 대기 등 아무 동작)이 들어 있으면 결과가 훨씬 정확합니다. 모델은 참조 모션의 첫 프레임 자세와 그 렌더 이미지를 '이 캐릭터가 어떻게 생겼는지'의 기준으로 씁니다. 첫 프레임에 T포즈 / 바인드 포즈가 있으면 그 프레임은 자동으로 건너뜁니다.
+  - 믹사모: 아무 애니메이션이나 골라 With Skin 으로 받으세요.
+  - 애니메이션을 구할 수 없는 캐릭터(동물, 사물 등): 블렌더에서 10프레임 이상의 간단한 동작(숨쉬기, 고개 돌리기 등)을 키로 잡아 내보내세요. 10프레임보다 짧은 애니메이션은 참조 모션으로 쓰지 않고 자동 기준 모션으로 넘어갑니다.
+- 애니메이션이 하나도 없으면 모든 본을 살짝 움직인 기준 모션을 자동으로 만들어 씁니다(옵션 없이 항상 켜져 있음). 리깅만 된 캐릭터도 그대로 넣으면 됩니다. 이때는 참조 자세가 기본 포즈(T포즈 등)라서, 결과 팔다리가 기본 포즈 쪽으로 벌어지는 경향이 있습니다. 콘솔에 [NOTE] 로 알려 줍니다.
+- 단위(cm / m)와 위쪽 축(Y-up / Z-up)은 자동으로 맞춥니다. 믹사모 FBX 와 블렌더에서 내보낸 FBX 모두 그대로 넣으면 됩니다.
+- front: 캐릭터가 FBX 안에서 바라보는 방향입니다. 기본값 +z 그대로 두면 됩니다. 믹사모 캐릭터와, 블렌더 Front 뷰(넘패드 1)에서 얼굴이 보이게 만든 캐릭터(기본 설정 FBX 내보내기)는 +z 입니다. front_view 에 옆모습이나 뒷모습이 보이면 -z, +x, -x 중에서 바꿔 다시 실행하세요. 정면이 틀리면 결과가 크게 엉성해집니다.
+- 자동 변경 감지: 같은 name 으로 다시 실행했을 때 FBX 파일(경로, 크기, 수정 시각)과 front 가 지난번과 같으면 준비를 건너뛰고 몇 초 만에 끝납니다. 콘솔에 [prepare] '이름' is unchanged ... preparation skipped 가 표시됩니다. FBX 를 다시 내보냈거나 front 를 바꾸면 자동으로 다시 준비합니다. 그래서 이 노드를 모션 추출 노드 앞에 계속 연결해 둬도 됩니다.
+- 같은 name 에 다른 FBX 를 넣으면 이전 캐릭터 데이터를 덮어씁니다(콘솔에 [prepare] NOTE 표시).
+- blender_path: 블렌더를 기본 위치가 아닌 곳에 설치했을 때만 적습니다.
+- 출력 target: 준비된 캐릭터 이름. MCA Motion Capture 의 target 에 연결합니다.
+- 출력 front_view: 모델이 '이 캐릭터가 어떻게 생겼는지'의 기준으로 쓰는 참조 렌더 이미지입니다. Preview Image 에 연결해 캐릭터가 카메라를 정면으로 보는지 확인합니다.
+- 시간은 보통 5~15분 걸립니다. (블렌더 작업 여러 번 + 참조 이미지 렌더 + 임베딩) 콘솔에 ── 1/9 ~ ── 9/9 단계가 표시됩니다.
+- 본은 최대 150개까지입니다. 베일·머리카락 같은 물리용 본 체인(EZSoftBone 용)은 빼고 몸 뼈대만 있는 FBX 를 쓰세요. 물리 본은 엔진에서 따로 움직이므로 모션 추출에 넣을 필요가 없습니다.
+- 스킨 웨이트가 없는 메시(소품 등)는 빼 주세요. 결과 3D 미리보기에서 원점에 뭉쳐 보입니다.
+- 결과는 ComfyUI\models\mocapanything\characters\zoo 에, 로그는 같은 곳의 logs\prepare_이름.log 에 남습니다.
+
+
+5. 노드 2 — MCA Motion Capture
+
+- 입력 영상은 셋 중 하나를 연결합니다: video(Load Video 노드), images(이미지 시퀀스 + images_fps), video_path(파일 경로, input 폴더 기준 상대경로 가능).
+- target: MCA Prepare Character 의 target 출력을 연결합니다(필수).
+- use_sam: 켜면 SAM2 가 영상의 주 인물을 찾아 분리합니다. 배경이 복잡하거나 사람이 여럿일 때 권장합니다. 끄면 BiRefNet 배경 제거만 씁니다.
+- start_seconds, max_seconds: 영상의 어느 구간을 쓸지 정합니다. 모델 한계(301프레임) 때문에 한 번에 최대 10초입니다. 긴 영상은 구간을 나눠 여러 번 돌리세요.
+- filename_prefix: output 폴더 안의 경로와 파일 이름입니다. 다른 Save 노드와 같은 방식이라, Meshes/RigMesh 로 적으면 output\Meshes\RigMesh_00001_.fbx 로 저장되고 실행할 때마다 번호가 하나씩 늘어납니다. 날짜 폴더 같은 다른 폴더는 만들지 않습니다.
+- save_format: 저장 형식입니다.
+  - FBX: 리깅된 메시 + 뼈대 + 애니메이션. 유니티, 언리얼, 고도(4.3 이상) 공통.
+  - GLB: FBX 와 같은 내용. 고도에서 가장 매끄럽고 언리얼도 받습니다.
+  - BVH: 뼈대 + 애니메이션만 (형식상 메시를 담을 수 없음). 블렌더나 모캡 툴에서 쓸 때.
+- FBX / GLB 안의 캐릭터는 준비한 캐릭터 그대로입니다: 본 이름(공백만 _ 로 바뀜), 계층, 기본 포즈, 스킨 웨이트가 같고, 모션은 30fps 로 구워진 액션 하나입니다.
+- keep_work_files: 켜면 중간 파일(프레임 이미지, 원본 BVH 등)을 ComfyUI\temp\mocapanything 에 남깁니다. temp 폴더는 ComfyUI 를 다시 시작할 때 비워집니다. 문제를 확인할 때만 켜세요.
+- free_comfy_vram: 실행 전에 ComfyUI 가 들고 있는 모델을 VRAM 에서 내립니다. 켜 두는 것을 권합니다.
+- 결과 다듬기 (노드 아래쪽 5개 항목). FBX / GLB / BVH 세 형식 모두에 적용되고, mesh_3d / skeleton_3d 미리보기도 다듬은 결과로 보입니다. 콘솔에 [motion] 으로 무엇을 했는지 표시됩니다.
+  - stabilize: fix flips(기본) / lock facing / off
+    - fix flips: 관절 하나가 한두 프레임만 튀었다 돌아오는 오류를 앞뒤 프레임으로 메웁니다. 정상 동작은 건드리지 않습니다.
+    - lock facing: fix flips 에 더해 몸이 도는 회전(위쪽 축 기준)을 없애서, 캐릭터가 항상 자기 정면을 봅니다. 정면에서 추는 춤, 걷기, 뛰기처럼 방향이 바뀌지 않는 동작에 쓰세요. 몸 방향은 골반 하나가 아니라 양쪽 허벅지와 양팔을 이은 선으로 판단합니다. 모델이 골반만 몇 도 틀어 잡는 경우가 있어서입니다. 실제로 도는 동작(턴, 스핀)은 회전이 사라지므로 fix flips 로 두세요.
+    - off: 모델 결과 그대로.
+  - foot_lock: 기본 꺼짐. 켜면 매 프레임 가장 낮은 발을 바닥에 붙이고, 디디고 있는 발이 미끄러지지 않게 골반을 움직입니다. 그래서 걸으면 걸음만큼 앞으로 나아갑니다(루트 모션). 걷기, 뛰기에 좋고, 점프, 앉기, 무릎 꿇기처럼 두 발이 다 바닥에서 떨어지거나 몸이 내려가는 동작에서는 끄세요. 끄면 원본처럼 골반이 한 자리에 고정되고, 무릎을 굽힐 때 발이 뜰 수 있습니다.
+  - in_place: 켜면 바닥 위 이동을 없앱니다. 믹사모의 In Place 와 같습니다. foot_lock 과 같이 켜면 위아래 움직임(무릎 굽힘, 점프)은 남기고, foot_lock 이 꺼져 있으면 골반이 한 자리에 그대로 있습니다. 게임에서 캐릭터 이동을 코드로 처리할 때 켜세요. (기본 꺼짐)
+  - mirror_limbs: off(기본) / auto / left -> right / right -> left
+    - 한쪽 팔다리 동작을 반대쪽에 좌우 대칭으로 복사합니다. 옆모습 영상에서 카메라 반대쪽이 가려져 절룩거릴 때 씁니다.
+    - left -> right 는 왼쪽 동작을 오른쪽에 복사합니다(캐릭터 기준 왼쪽). auto 는 덜 떨리는 쪽을 골라 복사하는데, 판단이 틀릴 수 있으니 카메라에 가까운 쪽을 알면 직접 고르세요.
+    - 어깨부터 손가락, 허벅지부터 발가락까지 좌우 짝이 있는 본만 바뀌고, 골반, 척추, 목, 머리는 그대로입니다.
+    - 본 이름에 Left/Right(또는 L/R) 구분이 있어야 합니다. 믹사모 리그는 됩니다.
+  - mirror_timing: match original(기본) / half cycle / same frame
+    - match original: 절룩거리던 쪽 다리가 가장 앞으로 나온 순간과 가장 뒤로 간 순간을 찾아, 복사한 동작을 그 시점에 맞춥니다. 걸음이 빨라지거나 느려져도 원래 리듬을 따라갑니다. 그 순간을 찾지 못하면 half cycle 로 바꿔 씁니다.
+    - half cycle: 걸음 주기의 반만큼 밀어서 좌우가 엇갈리게 합니다.
+    - same frame: 시간 차 없이 복사합니다. 점프, 양손 들기처럼 좌우가 같이 움직이는 동작에 씁니다.
+  - 추천 조합
+    - 정면에서 추는 춤, 제자리 동작: stabilize = lock facing, foot_lock 켬 (게임용 제자리 클립이면 in_place 도 켬)
+    - 옆모습 걷기: mirror_limbs = 카메라에 가까운 쪽 -> 반대쪽, mirror_timing = match original, stabilize = lock facing, foot_lock 켬
+    - mirror_limbs 의 left/right 는 영상 화면 기준이 아니라 캐릭터 본 이름(Left/Right) 기준입니다. 결과에서 복사 방향이 반대로 보이면 반대 방향으로 바꾸세요.
+    - 돌거나 방향이 바뀌는 동작: stabilize = fix flips
+- 출력 file_path: 저장한 파일 경로.
+- 출력 mesh_3d / skeleton_3d: 'Preview 3D (Advanced)' 노드에 연결하면 결과를 돌려 볼 수 있습니다. 미리보기용 파일이라 output 이 아니라 temp 폴더에만 만들어집니다.
+- 비교 영상(입력 | 스켈레톤)은 만들지 않습니다.
+- 실행 중 ComfyUI 의 취소(Cancel)를 누르면 계산 프로세스도 함께 멈춥니다.
+
+
+6. 결과 쓰기
+
+- 유니티: FBX 를 Assets 에 넣고 Rig 탭에서 Humanoid(또는 Generic)로 가져옵니다. 애니메이션만 쓸 때는 Animation 탭의 클립만 쓰면 됩니다.
+- 언리얼: FBX 를 가져올 때 기존 스켈레톤을 지정하면 애니메이션만 들어오고, 지정하지 않으면 메시와 스켈레톤까지 새로 만듭니다.
+- 고도: GLB 를 프로젝트에 넣으면 바로 씬으로 쓸 수 있습니다. FBX 도 4.3 이상에서는 그대로 들어갑니다.
+- 블렌더: FBX / GLB 를 불러오면 캐릭터에 모션이 입혀진 상태로 열립니다. 뼈대와 모션만 필요하면 메시 오브젝트를 지우고 다시 내보내면 됩니다.
+- 저장한 형식을 바꾸고 싶으면 블렌더에서 불러와 다른 형식으로 내보내면 됩니다(FBX ↔ GLB).
+- foot_lock 을 켜고 in_place 를 끄면, 걸음만큼 Hips 본이 이동하는 루트 모션이 들어갑니다. 엔진의 루트 모션 기능을 쓰거나, 이동을 코드로 처리하려면 in_place 를 켜세요.
+
+
+7. 구조 메모 (문제가 생겼을 때 참고)
+
+- 노드는 계산을 별도 파이썬 프로세스(win\mocap_cli.py)에서 돌립니다. 이 저장소의 utils / models 같은 폴더 이름이 ComfyUI 쪽과 겹쳐서, 같은 프로세스에 불러오면 ComfyUI 가 망가질 수 있기 때문입니다.
+- 그래서 실행할 때마다 모델을 새로 불러오느라 30초~1분 정도 더 걸립니다. 대신 끝나면 VRAM 을 전부 돌려줍니다.
+- 노드 진행 상황과 오류는 ComfyUI 콘솔 창에 [MocapAnything] 으로 표시됩니다.
+- 원본 저장소의 리눅스용 예제 폴더(examples)는 ComfyUI 템플릿 폴더 이름과 겹치지 않게 original_examples 로 이름을 바꿨습니다.
+
+
+8. 라이선스 (상업 사용 기준)
+
+- MoCapAnything V2 코드, 가중치: MIT
+- BiRefNet (배경 제거): MIT
+- DINOv2: Apache-2.0
+- SAM2: Apache-2.0
+- T5-base: Apache-2.0
+- roma (vendor 폴더에 동봉): BSD-3-Clause, NAVER Corp. 라이선스 파일 vendor\roma\LICENSE 포함
+- RMBG-1.4 는 코드와 가중치 모두 이 판에 들어 있지 않습니다.
+
+
+9. 확인된 것과 아직 확인 못 한 것
+
+- 리눅스 테스트 환경에서 실제 ComfyUI 서버(2026-10-29 커밋, 프론트엔드 1.57.6)를 띄워 확인했습니다: 예제 워크플로우가 Templates 에 나타나고 오류 없이 열림, 워크플로우 그대로 실행해 캐릭터 준비 → 모션 추출 → Preview 3D 두 개까지 끝나고 output 에 파일이 하나만 저장됨.
+- 저장 파일 검사: FBX / GLB 를 블렌더로 다시 불러와, 모든 프레임에서 관절 위치와 회전이 원본 BVH 와 같은지 비교했습니다(본 롤이 제각각인 리그 포함, 위치 오차 0, 회전 차이 0.04도 이하). 캐릭터 크기도 원본과 같습니다.
+- 그 밖에 확인한 것: 모델 폴더 등록과 첫 실행 자동 다운로드 흐름, 동봉한 roma 사용, 이미 준비된 캐릭터 건너뛰기, video_path / images 입력, 구간 지정, 취소 시 계산 프로세스 종료.
+- 미터 단위 FBX 와 cm 단위 FBX 가 같은 결과로 정리되는 것, 미터 단위 모션 FBX 의 루트 이동 거리와 공백 든 본 이름이 캐릭터와 같은 규칙으로 맞춰지는 것도 확인했습니다.
+- 그 환경은 GPU 와 모델 다운로드가 없어서 모델은 가짜로 바꿔 흐름만 확인했습니다. 실제 모션 품질은 확인하지 못했습니다.
+- 윈도우 실기에서 믹사모 캐릭터를 front +z 로 준비해 모션 추출이 잘 되는 것을 확인했습니다. 오류가 나면 ComfyUI 콘솔 창의 [MocapAnything] 마지막 30줄 정도를 보내 주세요.
+- 윈도우 실기(RTX 3060, ComfyUI 0.41.1)에서 예제 워크플로우 그대로 캐릭터 준비(약 140초) → front_view 출력 → 모션 추출 → FBX 저장까지 끝나는 것을 확인했습니다.
+- BiRefNet 을 불러오지 못하면(transformers 버전 문제 등) 자동으로 InSPyReNet(transparent-background, MIT)으로 바꿔 씁니다.
+- 결과 다듬기 옵션은 실제 춤 결과(정면 AI 영상, 150프레임, 믹사모 리그)로 확인했습니다. fix flips 가 튀는 3프레임을 고쳤고, lock facing 이 최대 215도까지 돌던 몸 방향을 정면으로 고정했고, foot_lock 이 최대 0.5m 떠 있던 발을 바닥에 붙였습니다. 다듬은 결과를 FBX 로 저장해 블렌더에서 렌더해 확인했습니다.
+- mirror_limbs 는 한쪽 다리를 일부러 망가뜨린 걷기 모션(중간에 걸음 속도가 바뀜)으로 확인했습니다. 복원한 쪽이 원래 동작과 평균 2도 차이였습니다(half cycle 8도, 복원 전 14도). 실제 옆모습 영상으로는 아직 확인하지 못했습니다.
+- FBX / GLB 저장은 블렌더 4.2, 4.5, 5.2 에서 모두 애니메이션이 정상으로 들어가는 것을 확인했습니다.
+
+
+10. 문제 해결 (콘솔 메시지는 영어로 나옵니다)
+
+- 모델 다운로드가 중간에 끊김: 노드를 다시 실행하면 이어서 받습니다.
+- "Blender not found": MCA Prepare Character 의 blender_path 에 blender.exe 경로를 적으세요.
+- "Character FBX not found": fbx_file 에서 FBX 를 다시 고르거나 fbx_path 에 전체 경로를 적으세요. 예제 워크플로우의 RiggedCharacter/Character.fbx 는 자리 표시용 이름입니다.
+- "FBX cleanup produced no output": ComfyUI\models\mocapanything\characters\zoo\_fixed\이름\_fix_failed.tsv 에 이유가 적혀 있습니다.
+- "The rig has N bones; MoCapAnything supports up to 150": 물리용 본 체인을 뺀 FBX 로 다시 준비하세요.
+- "'이름' is not a prepared character": MCA Motion Capture 의 target 에 MCA Prepare Character 의 target 출력을 연결하세요.
+- "No input video": video, images, video_path 중 하나를 연결하거나 적으세요.
+- front_view 에 옆모습이나 뒷모습이 보임, 또는 결과에서 메시만 돌아가 있거나 동작이 크게 엉성함: front 를 -z, +x, -x 중 하나로 바꿔 다시 실행하세요. front 를 바꾸면 자동으로 다시 준비합니다.
+- "Alignment to +Z failed": front 를 다른 방향으로 바꿔 보세요. 이유는 ComfyUI\models\mocapanything\characters\zoo\characters_face_zplus\_align_failed.tsv 에 적혀 있습니다.
+- 참조 이미지 렌더가 오래 걸림: 블렌더 EEVEE 로 정면 8프레임만 렌더합니다. 처음에는 셰이더 컴파일로 몇 분 걸릴 수 있습니다.
+- "No CUDA GPU found": NVIDIA GPU 와 CUDA 판 torch 가 필요합니다.
+- CUDA out of memory: free_comfy_vram 을 켜고 다시 실행하세요.
+- 결과 팔다리가 영상보다 벌어지거나 T포즈 쪽으로 끌려감: 애니메이션이 들어 있는 캐릭터 FBX 로 다시 실행하세요(FBX 가 바뀌면 자동으로 다시 준비합니다). 콘솔에 'no animation found' [NOTE] 가 보였다면 이 경우입니다.
+- 결과에서 발이 공중에 뜸: foot_lock 을 켜세요.
+- 몸이 혼자 빙글빙글 돌거나 엉뚱한 방향을 봄: stabilize 를 lock facing 으로 바꾸세요.
+- 옆모습 영상에서 반대쪽 팔다리가 절룩거림: mirror_limbs 를 카메라에 가까운 쪽 -> 반대쪽으로 고르세요. 복사 방향이 반대로 보이면 반대로 바꾸세요.
+- 캐릭터가 앞으로 걸어 나가는데 제자리 클립이 필요함: in_place 를 켜세요.
+- "[motion] mirror: no Left/Right bone pairs found": 본 이름에 좌우 구분이 없는 리그라 mirror_limbs 를 쓸 수 없습니다.
+- 동작이 영상과 많이 다름: 전신이 잘리지 않고, 배경이 단순하고, 정면이나 대각선에서 찍은 영상일수록 잘 됩니다. AI 로 만든 영상(16fps 등)도 그대로 넣어도 됩니다. 30fps 로 맞춰 처리합니다.
+- 준비한 캐릭터를 모두 지우고 처음부터 하고 싶을 때: ComfyUI\models\mocapanything\characters 폴더를 통째로 지우세요. 캐릭터는 다음 실행 때 다시 준비됩니다.

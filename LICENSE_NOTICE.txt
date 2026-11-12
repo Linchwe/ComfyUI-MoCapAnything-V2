@@ -1,0 +1,55 @@
+* [3D] Video To Animation (MoCapAnything V2 for ComfyUI) - License Notice
+
+
+1. ComfyUI-MoCapAnything-V2 custom node
+
+- License: MIT, the same license as the original MoCapAnything V2 project.
+
+- This custom node is a modified version of MoCapAnything V2 (https://github.com/phongdaot/MocapAnything), ported to Windows / ComfyUI portable.
+
+- Original work: Copyright (c) 2026 Kehong Gong. Windows / ComfyUI port: Copyright (c) 2026 Linchwe.
+
+- The full MIT license text is in the LICENSE file inside the ComfyUI-MoCapAnything-V2 folder. When you redistribute the node, keep that LICENSE file and this notice with it.
+
+- The software is provided "AS IS", without warranty of any kind (see the MIT license text).
+
+
+2. Models downloaded on first run
+
+- These models are NOT included in the zip file. They are downloaded automatically from their original Hugging Face repositories on first run and stay under their own licenses.
+
+- MoCapAnything V2 weights (kehong/MoCapAnythingV2-weights): MIT
+
+- BiRefNet, background removal (ZhengPeng7/BiRefNet): MIT
+
+- DINOv2-large, image features (facebook/dinov2-large): Apache-2.0
+
+- SAM 2.1 hiera base-plus, person tracking (facebook/sam2.1-hiera-base-plus): Apache-2.0
+
+- T5-base, bone-name embeddings (google-t5/t5-base): Apache-2.0
+
+- InSPyReNet (transparent-background package, used only if BiRefNet cannot be loaded): MIT
+
+
+3. Code bundled in the zip file
+
+- roma 1.5.4 (vendor/roma): BSD-3-Clause, Copyright (c) 2020 NAVER Corp. The license file is included at vendor/roma/LICENSE.
+
+
+4. Removed from the original project
+
+- The original project used BRIA RMBG-1.4 for background removal, which is licensed for non-commercial use only. Its code and weights are completely removed from this version and are never downloaded. BiRefNet (MIT) is used instead.
+
+
+5. Training data
+
+- The MoCapAnything V2 weights were trained on data that includes Truebones Zoo animal motion data (https://truebones.gumroad.com/l/skZMC). No Truebones data is included in this package.
+
+- The original authors stated that the code and V2 weights are MIT-licensed, and that they are still looking into the training-data licensing (https://github.com/phongdaot/MocapAnything/issues/35). Check the original repository for updates before using the results in a commercial product.
+
+
+6. Your results
+
+- Files you create with this node (FBX, GLB, BVH) contain your own character (mesh, skeleton) and the motion captured from your own video. Make sure you have the rights to the character model and the video you use.
+
+- This notice is not legal advice. For commercial projects, review each license yourself or with a legal professional.

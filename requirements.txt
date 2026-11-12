@@ -1,0 +1,13 @@
+# Python packages that ComfyUI-MoCapAnything-V2 needs and ComfyUI itself does not include.
+# ComfyUI Manager installs them automatically. For a manual install, run this in the ComfyUI_windows_portable folder:
+#   python_embeded\python.exe -m pip install -r ComfyUI\custom_nodes\ComfyUI-MoCapAnything-V2\requirements.txt
+# torch, torchvision, transformers, numpy, scipy etc. come from ComfyUI, and roma is bundled in vendor/.
+# If another OpenCV (opencv-python or opencv-contrib-python) is already installed, remove the opencv line before installing.
+# Do NOT install requirements_original_linux.txt into ComfyUI (it would overwrite torch etc.).
+opencv-python-headless
+scikit-image
+matplotlib
+trimesh
+pygltflib
+imageio-ffmpeg
+timm

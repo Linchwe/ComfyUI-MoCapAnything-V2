@@ -1,0 +1,379 @@
+{
+ "id": "5b0e9a4c-2f1d-4d7a-9c3e-8a1f6b2d4e70",
+ "revision": 0,
+ "last_node_id": 6,
+ "last_link_id": 5,
+ "nodes": [
+  {
+   "id": 1,
+   "type": "LoadVideo",
+   "pos": [
+    0,
+    -40
+   ],
+   "size": [
+    380,
+    460
+   ],
+   "flags": {},
+   "order": 0,
+   "mode": 0,
+   "inputs": [],
+   "outputs": [
+    {
+     "name": "VIDEO",
+     "type": "VIDEO",
+     "links": [
+      1
+     ]
+    }
+   ],
+   "properties": {
+    "Node name for S&R": "LoadVideo",
+    "cnr_id": "comfy-core"
+   },
+   "widgets_values": [
+    "Walking.mp4",
+    "image"
+   ]
+  },
+  {
+   "id": 2,
+   "type": "MCAPrepareRig",
+   "pos": [
+    0,
+    470
+   ],
+   "size": [
+    380,
+    200
+   ],
+   "flags": {},
+   "order": 1,
+   "mode": 0,
+   "inputs": [],
+   "outputs": [
+    {
+     "name": "target",
+     "type": "STRING",
+     "links": [
+      2
+     ]
+    },
+    {
+     "name": "front_view",
+     "type": "IMAGE",
+     "links": [
+      3
+     ]
+    }
+   ],
+   "properties": {
+    "Node name for S&R": "MCAPrepareRig"
+   },
+   "widgets_values": [
+    "RiggedCharacter/Character.fbx",
+    "Character",
+    "+z",
+    "",
+    ""
+   ]
+  },
+  {
+   "id": 6,
+   "type": "PreviewImage",
+   "pos": [
+    0,
+    720
+   ],
+   "size": [
+    380,
+    420
+   ],
+   "flags": {},
+   "order": 2,
+   "mode": 0,
+   "inputs": [
+    {
+     "name": "images",
+     "type": "IMAGE",
+     "link": 3
+    }
+   ],
+   "outputs": [],
+   "properties": {
+    "Node name for S&R": "PreviewImage",
+    "cnr_id": "comfy-core"
+   },
+   "widgets_values": []
+  },
+  {
+   "id": 3,
+   "type": "MCAMocap",
+   "pos": [
+    440,
+    -40
+   ],
+   "size": [
+    400,
+    560
+   ],
+   "flags": {},
+   "order": 3,
+   "mode": 0,
+   "inputs": [
+    {
+     "name": "target",
+     "type": "STRING",
+     "link": 2
+    },
+    {
+     "name": "video",
+     "shape": 7,
+     "type": "VIDEO",
+     "link": 1
+    },
+    {
+     "name": "images",
+     "shape": 7,
+     "type": "IMAGE",
+     "link": null
+    }
+   ],
+   "outputs": [
+    {
+     "name": "file_path",
+     "type": "STRING",
+     "links": null
+    },
+    {
+     "name": "mesh_3d",
+     "type": "FILE_3D_GLB",
+     "links": [
+      4
+     ]
+    },
+    {
+     "name": "skeleton_3d",
+     "type": "FILE_3D_GLB",
+     "links": [
+      5
+     ]
+    }
+   ],
+   "properties": {
+    "Node name for S&R": "MCAMocap"
+   },
+   "widgets_values": [
+    "MocapAnything/Mocap",
+    "FBX",
+    true,
+    0.0,
+    10.0,
+    "fix flips",
+    false,
+    false,
+    "off",
+    "match original",
+    false,
+    true,
+    30.0,
+    ""
+   ]
+  },
+  {
+   "id": 4,
+   "type": "Preview3DAdvanced",
+   "pos": [
+    900,
+    -40
+   ],
+   "size": [
+    440,
+    520
+   ],
+   "flags": {},
+   "order": 4,
+   "mode": 0,
+   "inputs": [
+    {
+     "name": "model_3d",
+     "type": "FILE_3D_GLB,FILE_3D_GLTF,FILE_3D_FBX,FILE_3D_OBJ,FILE_3D_STL,FILE_3D_USDZ,FILE_3D",
+     "link": 4
+    },
+    {
+     "name": "model_3d_info",
+     "shape": 7,
+     "type": "LOAD3D_MODEL_INFO",
+     "link": null
+    },
+    {
+     "name": "camera_info",
+     "shape": 7,
+     "type": "LOAD3D_CAMERA",
+     "link": null
+    }
+   ],
+   "outputs": [
+    {
+     "name": "model_3d",
+     "type": "FILE_3D",
+     "links": null
+    },
+    {
+     "name": "model_3d_info",
+     "type": "LOAD3D_MODEL_INFO",
+     "links": null
+    },
+    {
+     "name": "camera_info",
+     "type": "LOAD3D_CAMERA",
+     "links": null
+    },
+    {
+     "name": "width",
+     "type": "INT",
+     "links": null
+    },
+    {
+     "name": "height",
+     "type": "INT",
+     "links": null
+    }
+   ],
+   "properties": {
+    "Node name for S&R": "Preview3DAdvanced",
+    "cnr_id": "comfy-core"
+   },
+   "widgets_values": [
+    "",
+    1024,
+    1024
+   ]
+  },
+  {
+   "id": 5,
+   "type": "Preview3DAdvanced",
+   "pos": [
+    1380,
+    -40
+   ],
+   "size": [
+    440,
+    520
+   ],
+   "flags": {},
+   "order": 5,
+   "mode": 0,
+   "inputs": [
+    {
+     "name": "model_3d",
+     "type": "FILE_3D_GLB,FILE_3D_GLTF,FILE_3D_FBX,FILE_3D_OBJ,FILE_3D_STL,FILE_3D_USDZ,FILE_3D",
+     "link": 5
+    },
+    {
+     "name": "model_3d_info",
+     "shape": 7,
+     "type": "LOAD3D_MODEL_INFO",
+     "link": null
+    },
+    {
+     "name": "camera_info",
+     "shape": 7,
+     "type": "LOAD3D_CAMERA",
+     "link": null
+    }
+   ],
+   "outputs": [
+    {
+     "name": "model_3d",
+     "type": "FILE_3D",
+     "links": null
+    },
+    {
+     "name": "model_3d_info",
+     "type": "LOAD3D_MODEL_INFO",
+     "links": null
+    },
+    {
+     "name": "camera_info",
+     "type": "LOAD3D_CAMERA",
+     "links": null
+    },
+    {
+     "name": "width",
+     "type": "INT",
+     "links": null
+    },
+    {
+     "name": "height",
+     "type": "INT",
+     "links": null
+    }
+   ],
+   "properties": {
+    "Node name for S&R": "Preview3DAdvanced",
+    "cnr_id": "comfy-core"
+   },
+   "widgets_values": [
+    "",
+    1024,
+    1024
+   ]
+  }
+ ],
+ "links": [
+  [
+   1,
+   1,
+   0,
+   3,
+   1,
+   "VIDEO"
+  ],
+  [
+   2,
+   2,
+   0,
+   3,
+   0,
+   "STRING"
+  ],
+  [
+   3,
+   2,
+   1,
+   6,
+   0,
+   "IMAGE"
+  ],
+  [
+   4,
+   3,
+   1,
+   4,
+   0,
+   "FILE_3D_GLB"
+  ],
+  [
+   5,
+   3,
+   2,
+   5,
+   0,
+   "FILE_3D_GLB"
+  ]
+ ],
+ "groups": [],
+ "config": {},
+ "extra": {
+  "ds": {
+   "scale": 0.75,
+   "offset": [
+    560,
+    180
+   ]
+  }
+ },
+ "version": 0.4
+}
